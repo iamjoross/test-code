@@ -27,6 +27,10 @@ Refer to python_challenge.pdf
 ## Code Design
 The codebase is using a modified Observer Pattern for an object to listen to a certain event. It makes use of asynchronous techniques to make it efficient. All remaining tasks are cancelled when an exception occurs.
 
+### Class Diagram
+![Class Diagram](UML.jpg)
+
+
 ## File Structure
 <pre>
 .
