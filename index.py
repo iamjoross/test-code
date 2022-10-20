@@ -8,9 +8,12 @@ async def main():
     await conn.add_group("group1")
     await conn.add_group("group2")
     # await conn.add_group("group3")
-    # await conn.add_group("group3")
+    # await conn.add_group("group4")
 
-    # await conn.delete_group("group1")
+    await conn.delete_group("group1")
+    await conn.delete_group("group2")
+    # await conn.delete_group("group3")
+    # await conn.delete_group("group4")
 
 
 
