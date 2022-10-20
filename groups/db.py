@@ -17,8 +17,13 @@ class GroupDatabase(DatabaseInterface):
     self.auto_commit:bool = auto_commit
 
     self._shadow_db: list[GroupSchema]  = []
+    if not self.auto_commit:
+      self._shadow_db = self.db.copy()
+
+  def __len__(self):
     if self.auto_commit:
-      self._shadow_db = self.db
+      return len(self.db)
+    return len(self._shadow_db)
 
   def add(self, json: dict[str, str]) -> str | GroupAlreadyExists:
     """Add to Group database
@@ -33,9 +38,9 @@ class GroupDatabase(DatabaseInterface):
         str | GroupAlreadyExists: group id or error
     """
     group: GroupSchema = GroupSchema(**json)
-    db: list[GroupSchema] = self.db
+    db: list[GroupSchema] = self.db.copy()
     if not self.auto_commit:
-      db = self._shadow_db
+      db = self._shadow_db.copy()
 
     idx: int | None = self._search(group.groupId)
 
@@ -43,6 +48,11 @@ class GroupDatabase(DatabaseInterface):
       raise GroupAlreadyExists("Group already exists")
 
     db.append(group)
+
+    if not self.auto_commit:
+      self._shadow_db = db.copy()
+    else:
+      self.db = db.copy()
 
     return group.groupId
 
@@ -94,25 +104,31 @@ class GroupDatabase(DatabaseInterface):
     Returns:
         str: deleted group id
     """
-    db: list[GroupSchema] = self.db
+    db: list[GroupSchema] = self.db.copy()
     if not self.auto_commit:
-      db = self._shadow_db
+      db = self._shadow_db.copy()
 
     idx: int | None = self._search(key)
     if idx is None:
       raise GroupNotFound('Group does not exist')
     popped: GroupSchema = db.pop(idx)
+
+    if not self.auto_commit:
+      self._shadow_db = db.copy()
+    else:
+      self.db = db.copy()
+
     return popped.groupId
 
   def rollback(self) -> None:
     """Imitate sqlalchemy rollback function
     """
-    self._shadow_db = self.db
+    self._shadow_db = self.db.copy()
 
   def commit(self) -> None:
     """Imitate sqlalchemy commit function
     """
-    self.db = self._shadow_db
+    self.db = self._shadow_db.copy()
 
 
 

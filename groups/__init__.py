@@ -8,6 +8,9 @@ class Groups:
     """
     self.db = GroupDatabase(auto_commit=False)
 
+  def __len__(self):
+    return len(self.db.db)
+
   def __iter__(self):
     """Iterator
 
