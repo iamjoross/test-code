@@ -20,7 +20,12 @@ class GroupDatabase(DatabaseInterface):
     if not self.auto_commit:
       self._shadow_db = self.db.copy()
 
-  def __len__(self):
+  def __len__(self) -> int:
+    """Returns length of the object
+
+    Returns:
+        int: length of Groups
+    """
     if self.auto_commit:
       return len(self.db)
     return len(self._shadow_db)

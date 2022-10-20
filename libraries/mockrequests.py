@@ -24,7 +24,7 @@ class Requests:
             return {"status_code": 404, "raise_for_status": raise_for_status}
 
     @classmethod
-    def delete(self, url, id:str ,node, error: bool = False):
+    async def delete(self, url, id:str ,node, error: bool = False):
         if not error:
             node.groups.db.delete(id)
             return {"status_code": 200, "raise_for_status": dont_raise}

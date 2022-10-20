@@ -6,9 +6,14 @@ class Groups:
   def __init__(self) -> None:
     """Initializes with GroupDatabase instance attached to mock database persistence
     """
-    self.db = GroupDatabase(auto_commit=False)
+    self.db:GroupDatabase = GroupDatabase(auto_commit=False)
 
-  def __len__(self):
+  def __len__(self) -> int:
+    """Returns length of the object
+
+    Returns:
+        int: length of Groups
+    """
     return len(self.db.db)
 
   def __iter__(self):

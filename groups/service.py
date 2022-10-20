@@ -1,35 +1,40 @@
-import traceback
 
-from requests import HTTPError
+from types import CoroutineType
+from constants import BASE_URL
 from groups.schema import GroupSchema
 from libraries.mockrequests import Requests
 
 
-BASE_URL = "http://www.test.com"
-
 class GroupService:
 
   def __init__(self, node) -> None:
-    self.api_url = f'{BASE_URL}/v1/group'
+    """Initialize GroupService
+
+    Args:
+        node (Node): Node attached to service
+    """
+    self.api_url:str = f'{BASE_URL}/v1/group'
     self.node  = node
 
-  async def create(self, payload: GroupSchema, error:bool = False):
+  async def create(self, payload: GroupSchema, error:bool = False)->None:
+    """Makes a request to create a group
+
+    Args:
+        payload (GroupSchema): Group payload
+        error (bool, optional): To mock a raised error. Defaults to False.
+    """
     print(f"[GroupService] Adding group:{payload} to node:{self.node}...")
-    response = await Requests.post(self.api_url, json=dict(payload), node=self.node, error=error)
+    response:CoroutineType = await Requests.post(self.api_url, json=dict(payload), node=self.node, error=error)
     response.get('raise_for_status')()
     print(f"[GroupService] {self.node} Group {payload.groupId} added.")
 
 
-  def delete(self, payload: GroupSchema, error:bool = False):
+  async def delete(self, payload: GroupSchema, error:bool = False):
     print(f"[GroupService] Deleting group:{payload.groupId} from node:{self.node}...")
-    try:
-      response = Requests.delete(f"{self.api_url}/{payload.groupId}", id=payload.groupId, node=self.node, error=error)
-      response.get('raise_for_status')()
-      print(f"Group {payload.groupId} deleted successfully!")
-      return True
-    except Exception as err:
-      print(f"[GroupService] Error: {err} ")
-      return False
+    response = await Requests.delete(f"{self.api_url}/{payload.groupId}", id=payload.groupId, node=self.node, error=error)
+    response.get('raise_for_status')()
+    print(f"[GroupService] {self.node} Group {payload.groupId} deleted.")
+
 
   # def get(self, group_id: str):
     # try:
