@@ -59,7 +59,7 @@ def test_groupdb_add(db: GroupDatabase):
   payload = {"groupId": id}
   resp = db.add(payload)
   assert len(db.db) == 1
-  assert len(db._shadow_db) == 1
+  assert len(db._shadow_db) == 0
   assert resp == id
 
 

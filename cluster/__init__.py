@@ -35,6 +35,7 @@ class ClusterConnection:
         """
         print("[ClusterConnection] Connecting to cluster...")
         self.cluster: Cluster = Cluster(hosts)
+        self.redis = redis
         print("[ClusterConnection] Connection established.")
         print("-" * 80)
 
