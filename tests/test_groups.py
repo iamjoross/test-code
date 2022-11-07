@@ -23,10 +23,11 @@ def test_groups_init_default(groups):
 def test_groups_add(groups):
   group_ids = ["group1", "group2"]
   for id in group_ids:
-    groups.db.db.append(GroupSchema(groupId=id))
+    group = GroupSchema(groupId=id)
+    groups.db.db[id] = group
 
-  for idx, group in enumerate(groups):
-    assert group == group_ids[idx]
+  for group in groups.db.db:
+    assert group in group_ids
 
 ##############################
 #
@@ -44,7 +45,7 @@ def test_groupdb_init_false_commit():
   assert len(db.db) == 0
   assert db.auto_commit == False
   assert len(db._shadow_db) == 0
-  assert db.db == []
+  assert db.db == {}
 
 @pytest.fixture
 def db():
@@ -89,7 +90,7 @@ def test_groupdb_search(db_false_autocommit: GroupDatabase):
   db.add(payload1)
   db.add(payload2)
   resp = db._search("group1")
-  assert resp == 0
+  assert resp == True
 
 def test_groupdb_search_not_found(db_false_autocommit: GroupDatabase):
   db = db_false_autocommit
@@ -98,7 +99,7 @@ def test_groupdb_search_not_found(db_false_autocommit: GroupDatabase):
   db.add(payload1)
   db.add(payload2)
   resp = db._search("group3")
-  assert resp == None
+  assert resp == False
 
 def test_groupdb_query(db_false_autocommit: GroupDatabase):
   db = db_false_autocommit

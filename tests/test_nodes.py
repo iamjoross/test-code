@@ -73,7 +73,7 @@ async def test_handle_on_cluster_add_group_with_error():
 def node():
     node = Node("node1")
     group = GroupSchema(groupId="group1")
-    node.groups.db._shadow_db.append(group)
+    node.groups.db._shadow_db[group.groupId] = group
     return node
 
 
