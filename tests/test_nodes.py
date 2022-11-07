@@ -13,6 +13,11 @@ from nodes import (
 )
 from event import subscribers
 
+"""
+@fixture
+def disable_delays():
+    async method that disables all sleep in the coroutines
+"""
 
 def test_create_node_default():
     id = "host_1"

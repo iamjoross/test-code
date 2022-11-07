@@ -1,28 +1,30 @@
 import argparse
 import asyncio
-from cluster import ClusterConnection
+import logging
+from cluster import ClusterConnection, GroupOperation
 from constants import HOSTS
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 async def default_scenario():
     """default scenario
     """
     conn = ClusterConnection(HOSTS)
-    await conn.add_group("group1")
-    await conn.add_group("group2")
-    await conn.delete_group("group1")
+    await conn.group_handle(GroupOperation.ADD, "group1")
+    await conn.group_handle(GroupOperation.ADD, "group2")
 
 
 async def add_group_error_scenario():
     """Scenario where when adding raises conflict"""
     conn = ClusterConnection(HOSTS)
-    await conn.add_group("group1")
-    await conn.add_group("group1")
+    await conn.group_handle(GroupOperation.ADD, "group1")
+    await conn.group_handle(GroupOperation.ADD, "group2")
 
 
 async def remove_group_error_scenario():
     """Scenario where removing raises error"""
     conn = ClusterConnection(HOSTS)
+    await conn.group_handle(GroupOperation.DELETE, "group2")
     await conn.delete_group("group2")
 
 
@@ -40,10 +42,10 @@ async def custom_scenario(
     conn = ClusterConnection(hosts)
 
     for i in range(groups_to_add):
-        await conn.add_group(f"group_{i}")
+        await conn.group_handle(GroupOperation.ADD, "group_{i}")
 
-    for i in range(groups_to_add):
-        await conn.delete_group(f"group_{i}")
+    for i in range(groups_to_remove):
+        await conn.group_handle(GroupOperation.DELETE, "group_{i}")
 
 
 async def main(

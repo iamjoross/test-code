@@ -3,7 +3,7 @@ from types import CoroutineType
 from constants import BASE_URL
 from groups.schema import GroupSchema
 from libraries.mockrequests import Requests
-
+import logging
 
 class GroupService:
 
@@ -23,25 +23,25 @@ class GroupService:
         payload (GroupSchema): Group payload
         error (bool, optional): To mock a raised error. Defaults to False.
     """
-    print(f"[GroupService] Adding group:{payload} to node:{self.node}...")
+    logging.debug(f"[GroupService] Adding group:{payload} to node:{self.node}...")
     response:CoroutineType = await Requests.post(self.api_url, json=dict(payload), node=self.node, error=error)
     response.get('raise_for_status')()
-    print(f"[GroupService] {self.node} Group {payload.groupId} added.")
+    logging.debug(f"[GroupService] {self.node} Group {payload.groupId} added.")
 
 
   async def delete(self, payload: GroupSchema, error:bool = False):
-    print(f"[GroupService] Deleting group:{payload.groupId} from node:{self.node}...")
+    logging.debug(f"[GroupService] Deleting group:{payload.groupId} from node:{self.node}...")
     response = await Requests.delete(f"{self.api_url}/{payload.groupId}", id=payload.groupId, node=self.node, error=error)
     response.get('raise_for_status')()
-    print(f"[GroupService] {self.node} Group {payload.groupId} deleted.")
+    logging.debug(f"[GroupService] {self.node} Group {payload.groupId} deleted.")
 
 
   # def get(self, group_id: str):
     # try:
     #   response = requests.get(f"{self.api_url}/{group_id}")
     #   response.raise_for_status()
-    #   print(f"Group {group_id} deleted successfully!")
+    #   logging.debug(f"Group {group_id} deleted successfully!")
     #   return True
     # except (HTTPError, Exception) as err:
-    #   print(err)
+    #   logging.debug(err)
     #   return False

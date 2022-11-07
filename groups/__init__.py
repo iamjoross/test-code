@@ -1,4 +1,5 @@
 from groups.db import GroupDatabase
+import logging
 
 class Groups:
   """Groups instance

@@ -1,3 +1,4 @@
+from typing import Any
 from groups.schema import GroupSchema
 from interfaces import DatabaseInterface, GroupAlreadyExists, GroupNotFound
 
@@ -13,10 +14,10 @@ class GroupDatabase(DatabaseInterface):
     Args:
         auto_commit (bool, optional): mocks the auto_commit behavior of a databasel; when True (default), all changes are  saved to the db automatically; when False, all changes are saved in a temporary db shadowing the real persistent state to imitate actual behvaior in sqlalchemy. Defaults to True.
     """
-    self.db: list[GroupSchema] = []
+    self.db: dict[str, Any] = {}
     self.auto_commit:bool = auto_commit
 
-    self._shadow_db: list[GroupSchema]  = []
+    self._shadow_db: dict[str, Any] = {}
     if not self.auto_commit:
       self._shadow_db = self.db.copy()
 
@@ -43,16 +44,16 @@ class GroupDatabase(DatabaseInterface):
         str | GroupAlreadyExists: group id or error
     """
     group: GroupSchema = GroupSchema(**json)
-    db: list[GroupSchema] = self.db.copy()
+    db: dict[str, Any] = self.db.copy()
     if not self.auto_commit:
       db = self._shadow_db.copy()
 
-    idx: int | None = self._search(group.groupId)
+    group_exists = self._search(group.groupId)
 
-    if idx is not None:
+    if group_exists:
       raise GroupAlreadyExists("Group already exists")
 
-    db.append(group)
+    db[group.groupId] = group
 
     if not self.auto_commit:
       self._shadow_db = db.copy()
@@ -61,23 +62,22 @@ class GroupDatabase(DatabaseInterface):
 
     return group.groupId
 
-  def _search(self, key: str) -> int | None:
+  def _search(self, key: str) -> bool:
     """Search helper function
 
     Args:
         key (str): group id to search
 
     Returns:
-        int | None: group id or none
+        bool
     """
     db = self.db
     if not self.auto_commit:
       db = self._shadow_db
 
-    for idx, group in enumerate(db):
-      if group.groupId == key:
-        return idx
-    return None
+    if key in db:
+      return True
+    return False
 
   def query(self, key: str) -> GroupSchema | None:
     """Gets or query for a group in group database
@@ -92,9 +92,9 @@ class GroupDatabase(DatabaseInterface):
     if not self.auto_commit:
       db = self._shadow_db
 
-    idx: int | None = self._search(key)
-    if idx is not None:
-      return db[idx]
+    group_exists= self._search(key)
+    if group_exists:
+      return db[key]
     return None
 
   def delete(self, key: str) -> str:
@@ -109,14 +109,15 @@ class GroupDatabase(DatabaseInterface):
     Returns:
         str: deleted group id
     """
-    db: list[GroupSchema] = self.db.copy()
+    db: dict[str, Any] = self.db.copy()
     if not self.auto_commit:
       db = self._shadow_db.copy()
 
-    idx: int | None = self._search(key)
-    if idx is None:
+    group_exists= self._search(key)
+    if not group_exists:
       raise GroupNotFound('Group does not exist')
-    popped: GroupSchema = db.pop(idx)
+    popped: GroupSchema = db[key]
+    del db[key]
 
     if not self.auto_commit:
       self._shadow_db = db.copy()

@@ -1,29 +1,31 @@
 
 
-import os
+import logging
 from random import randint
-import sys
 from unittest.mock import patch
+from cluster import Cluster, ClusterConnection, GroupOperation
+from pytest_cases import fixture, parametrize
 import pytest
-from cluster import Cluster, ClusterConnection
-from interfaces import GroupAlreadyExists
 
-sys.stdout = open(os.devnull, 'w')
+# logging.getLogger().setLevel(logging.DEBUG)
 
-@pytest.fixture
+
+@pytest.fixture(scope="function")
 def hosts():
-  return [
-      "node01.app.internal.com",
-      "node02.app.internal.com",
-      "node03.app.internal.com",
-      "node04.app.internal.com",
-  ]
+  rand_val = randint(0, 100)
+  return [i for i in range(rand_val)]
+
 
 class TestCluster:
 
-  def test_init(self, hosts):
+  @pytest.mark.repeat(3)
+  def test_init_with_hosts(self, hosts):
     cluster = Cluster(hosts)
     assert len(cluster.node_registry) == len(hosts)
+
+  def test_init_without_hosts(self):
+    with pytest.raises(TypeError):
+      cluster = Cluster()
 
 class TestClusterConnection:
 
@@ -31,61 +33,54 @@ class TestClusterConnection:
   def conn(self, hosts):
     return ClusterConnection(hosts)
 
-
   def test_init(self, hosts):
     conn = ClusterConnection(hosts)
     assert len(conn.cluster.node_registry) == len(hosts)
+    assert conn.redis is not None
+
+  def test_init_without_hosts(self):
+    with pytest.raises(TypeError):
+      cluster = ClusterConnection()
 
   @pytest.mark.asyncio
-  async def test_process_rollback(self, conn: ClusterConnection, hosts):
+  async def test_group_handle_add(self, conn:ClusterConnection):
+    rand_val = randint(1, 5)
+    for i in range(rand_val):
+      await conn.group_handle(GroupOperation.ADD, f"group_{i}")
+
     for node in conn.cluster.node_registry:
-      conn.redis['processed_nodes'].append(node)
-    await conn._process_rollback()
-    assert len(conn.redis['processed_nodes']) == 0
+      assert len(node.groups) == rand_val
 
   @pytest.mark.asyncio
-  async def test_process_commit(self, conn: ClusterConnection, hosts):
+  async def test_process_add_group_with_conflict(self, conn: ClusterConnection):
+    rand_val = randint(1, 5)
+    for i in range(rand_val):
+      await conn.group_handle(GroupOperation.ADD, f"group_{i}")
+    await conn.group_handle(GroupOperation.ADD, f"group_0")
+
     for node in conn.cluster.node_registry:
-      conn.redis['processed_nodes'].append(node)
-    await conn._process_commit()
-    assert len(conn.redis['processed_nodes']) == 0
+      assert len(node.groups) == rand_val
 
 
   @pytest.mark.asyncio
-  async def test_process_add_group(self, conn: ClusterConnection, hosts):
-    max_range = randint(1, 10)
-    for i in range(0, max_range):
-      await conn.add_group(f"group_{i}")
+  async def test_process_delete_group(self, conn: ClusterConnection):
+    rand_val = randint(1, 5)
+    for i in range(rand_val):
+      await conn.group_handle(GroupOperation.ADD, f"group_{i}")
+    await conn.group_handle(GroupOperation.DELETE, f"group_0")
 
-    for i in range(0, len(hosts)):
-      assert len(conn.cluster.node_registry[0].groups) == max_range
-
-  @pytest.mark.asyncio
-  async def test_process_add_group_with_conflict(self, conn: ClusterConnection, hosts):
-    max_range = randint(1, 10)
-    for i in range(0, max_range):
-      await conn.add_group(f"group_{i}")
-    await conn.add_group(f"group_0")
-
-    for i in range(0, len(hosts)):
-      assert len(conn.cluster.node_registry[0].groups) == max_range
+    for node in conn.cluster.node_registry:
+      assert len(node.groups) == (rand_val - 1)
 
   @pytest.mark.asyncio
-  async def test_process_delete_group(self, conn: ClusterConnection, hosts):
-    max_range = randint(1, 10)
-    for i in range(0, max_range):
-      await conn.add_group(f"group_{i}")
+  async def test_process_delete_group_with_conflict(self, conn: ClusterConnection):
+    rand_val = randint(1, 5)
+    for i in range(rand_val):
+      await conn.group_handle(GroupOperation.ADD, f"group_{i}")
+    await conn.group_handle(GroupOperation.DELETE, f"group_6")
 
-    for i in range(0, len(hosts)):
-      assert len(conn.cluster.node_registry[0].groups) == max_range
+    for node in conn.cluster.node_registry:
+      assert len(node.groups) == rand_val
 
-  @pytest.mark.asyncio
-  async def test_process_add_group_with_conflict(self, conn: ClusterConnection, hosts):
-    max_range = randint(1, 10)
-    for i in range(0, max_range):
-      await conn.add_group(f"group_{i}")
-    await conn.add_group(f"group_0")
 
-    for i in range(0, len(hosts)):
-      assert len(conn.cluster.node_registry[0].groups) == max_range
 

@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass, field
+import logging
 from constants import CLUSTER_ADD_GROUP_EVENT, CLUSTER_COMMIT_GROUP_EVENT, CLUSTER_DELETE_GROUP_EVENT, CLUSTER_ROLLBACK_GROUP_EVENT
 from event import subscribe, subscribers
 from groups import Groups
@@ -36,7 +37,7 @@ class NodesRegistry:
     """
     registry: list[Node] = []
     for host in hosts:
-      print(f"[NodesRegistry] Building node {host}...")
+      logging.debug(f"[NodesRegistry] Building node {host}...")
       node:Node = Node(host)
       registry.append(node)
 
@@ -57,10 +58,9 @@ async def handle_ON_CLUSTER_ADD_GROUP(node: Node, payload: GroupSchema, error: b
         bool: response value
     """
     group_service:GroupService = GroupService(node)
-    await asyncio.sleep(0.01)
     await group_service.create(payload, error)
     Redis["processed_nodes"].append(node)
-    print(f"[ON_CLUSTER_ADD_GROUP Listener] node {node} current size: {len(node.groups.db)}")
+    logging.debug(f"[ON_CLUSTER_ADD_GROUP Listener] node {node} current size: {len(node.groups.db)}")
 
 
 async def handle_ON_CLUSTER_DELETE_GROUP(node: Node, payload: GroupSchema, error: bool):
@@ -76,11 +76,13 @@ async def handle_ON_CLUSTER_DELETE_GROUP(node: Node, payload: GroupSchema, error
         bool: response value
     """
     group_service:GroupService = GroupService(node)
-    await asyncio.sleep(0.01)
+
     await group_service.delete(payload, error)
     Redis["processed_nodes"].append(node)
-    print(f"[ON_CLUSTER_DELETE_GROUP Listener] node {node} current size: {len(node.groups.db)}")
+    logging.debug(f"[ON_CLUSTER_DELETE_GROUP Listener] node {node} current size: {len(node.groups.db)}")
 
+
+# sasync def
 
 async def handle_ON_CLUSTER_ROLLBACK_GROUP(node: Node):
     """Event handler for ON_CLUSTER_ROLLBACK_GROUP event
@@ -88,8 +90,8 @@ async def handle_ON_CLUSTER_ROLLBACK_GROUP(node: Node):
 
     """
     node.groups.db.rollback()
-    await asyncio.sleep(1)
-    print(f"[ON_CLUSTER_ROLLBACK_GROUP listener] Rolled back successfully for node: {node} | current size: {len(node.groups.db)}...")
+
+    logging.debug(f"[ON_CLUSTER_ROLLBACK_GROUP listener] Rolled back successfully for node: {node} | current size: {len(node.groups.db)}...")
 
 
 
@@ -101,13 +103,13 @@ async def handle_ON_CLUSTER_COMMIT_GROUP(node: Node) -> None:
         node (Node): Node instance
     """
     node.groups.db.commit()
-    await asyncio.sleep(1)
-    print(f"[ON_CLUSTER_COMMIT_GROUP listener] Committed successfully for node: {node} | current size: {len(node.groups.db)}...")
+
+    logging.debug(f"[ON_CLUSTER_COMMIT_GROUP listener] Committed successfully for node: {node} | current size: {len(node.groups.db)}...")
 
 
 def setup_event_handlers() -> None:
     """Setup all event handlers for nodes"""
-    print(f"[NodesRegistry] Subscribing to events...")
+    logging.debug(f"[NodesRegistry] Subscribing to events...")
     subscribe(CLUSTER_ADD_GROUP_EVENT, handle_ON_CLUSTER_ADD_GROUP)
     subscribe(CLUSTER_DELETE_GROUP_EVENT, handle_ON_CLUSTER_DELETE_GROUP)
     subscribe(CLUSTER_COMMIT_GROUP_EVENT, handle_ON_CLUSTER_COMMIT_GROUP)

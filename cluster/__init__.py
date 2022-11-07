@@ -1,4 +1,6 @@
 import asyncio
+from enum import Enum
+import logging
 
 from requests import HTTPError
 from event import post_event
@@ -10,6 +12,13 @@ from asyncio import Task
 
 redis = Redis
 
+class ProcessOperation(Enum):
+    ROLLBACK = 'ON_CLUSTER_ROLLBACK_GROUP'
+    COMMIT = 'ON_CLUSTER_COMMIT_GROUP'
+
+class GroupOperation(Enum):
+    ADD = 'ON_CLUSTER_ADD_GROUP'
+    DELETE = 'ON_CLUSTER_DELETE_GROUP'
 
 class Cluster:
     """Cluster object"""
@@ -20,9 +29,9 @@ class Cluster:
         Args:
             hosts (list[str]): list of hosts as nodes
         """
-        print("[Cluster] Building nodes registry...")
+        logging.debug("[Cluster] Building nodes registry...")
         self.node_registry: list[Node] = NodesRegistry.build(hosts)
-        print(
+        logging.debug(
             f"[Cluster] Finished building registry with {len(self.node_registry)} items."
         )
 
@@ -33,140 +42,62 @@ class ClusterConnection:
         Args:
             hosts (list[str]): list of hosts as nodes
         """
-        print("[ClusterConnection] Connecting to cluster...")
+        logging.debug("[ClusterConnection] Connecting to cluster...")
         self.cluster: Cluster = Cluster(hosts)
         self.redis = redis
-        print("[ClusterConnection] Connection established.")
-        print("-" * 80)
+        logging.debug("[ClusterConnection] Connection established.")
+        logging.debug("-" * 80)
 
-    async def _process_rollback(self) -> None:
-        """Rolls back flushed changes asynchronously
-        (1) Flushed changes are  saved in mocked Redis instance
-        (2) Coroutines are created wrapping event ON_CLUSTER_ROLLBACK_GROUP fn
-        (3) Coroutines are gathered together and catches Exception on first return
-        (4) Cancel coroutines after an exception is raised
-        """
+    async def _process(self, operation:ProcessOperation)-> None:
         tasks:list[Task] = []
-        print("\n")
-        for node in redis["processed_nodes"]:
-            print(
-                f"[ClusterConnection] Rolling back changes for node: {node} | current size: {len(node.groups.db)}..."
+        logging.debug("\n")
+        nodes = self.cluster.node_registry if operation == ProcessOperation.COMMIT else redis["processed_nodes"]
+        for node in nodes:
+            logging.debug(
+                f"[ClusterConnection - {operation.name}] node: {node} | current size: {len(node.groups.db)}..."
             )
-            task: Task = asyncio.create_task(post_event("ON_CLUSTER_ROLLBACK_GROUP", node))
+            task: Task = asyncio.create_task(post_event(operation.value, node))
             tasks.append(task)
-            await asyncio.sleep(1)
 
         try:
             await asyncio.gather(*tasks, return_exceptions=False)
             redis['processed_nodes'] = []
         except (HTTPError, GroupAlreadyExists, GroupNotFound) as e:
-            print(f"[{e.__class__.__name__}]", e)
-            for task in tasks:
-                task.cancel()
+            logging.debug(f"[{e.__class__.__name__}]", e)
+            await self._cancel_and_rollback(tasks)
 
-            await self._process_rollback()
+    async def _cancel_and_rollback(self, tasks: list[Task]) -> None:
+        for task in tasks:
+            task.cancel()
 
-    async def _process_commit(self) -> None:
-        """Commits flushed changes asynchronously
-        (1) Commit in each node
-        (2) Coroutines are created wrapping event ON_CLUSTER_COMMIT_GROUP fn
-        (3) Coroutines are gathered together and catches Exception on first return
-        (4) Cancel coroutines after an exception is raised
-        """
-        tasks: list[Task] = []
-        print("\n")
-        for node in self.cluster.node_registry:
-            print(
-                f"[ClusterConnection] Committing changes for node: {node} | current size: {len(node.groups.db)}..."
-            )
-            task:Task = asyncio.create_task(post_event("ON_CLUSTER_COMMIT_GROUP", node))
-            tasks.append(task)
-            await asyncio.sleep(1)
+        await self._process(ProcessOperation.ROLLBACK)
 
-        try:
-            await asyncio.gather(*tasks, return_exceptions=False)
-            redis['processed_nodes'] = []
-        except (HTTPError, GroupAlreadyExists, GroupNotFound) as e:
-            print(f"[{e.__class__.__name__}]", e)
-            for task in tasks:
-                task.cancel()
-
-            await self._process_rollback()
-
-
-    async def add_group(self, group_id:str) -> None:
-        """Add group to all nodes
-
-        Args:
-            group_id (str): group if of group to add
-        """
-        print(f"\n[ClusterConnection] Adding group id: {group_id}...")
+    async def group_handle(self, operation: GroupOperation, group_id: str, should_error: bool = False) -> None:
+        logging.debug(f"\n[ClusterConnection | {operation.name}] For group id: {group_id}...")
         group:GroupSchema = GroupSchema(groupId=group_id)
         tasks: list[Task] = []
         for idx, node in enumerate(self.cluster.node_registry):
-            # error = True if idx == len(self.cluster.node_registry) - 2 else False
-            error = False
-            print(
-                f"[ClusterConnection] Publishing event ON_CLUSTER_ADD_GROUP to {node}..."
+            # error = True if idx == len(self.cluster.node_registry) - 1 else False
+            logging.debug(
+                f"[ClusterConnection | {operation.name}] Publishing event with {node}..."
             )
-            if error:
-                print(f"[ClusterConnection] Simulating error on adding group...")
+            if should_error:
+                logging.debug(f"[ClusterConnection | {operation.name}] Simulating error...")
 
             task: Task = asyncio.create_task(
-                post_event("ON_CLUSTER_ADD_GROUP", node, group, error)
+                post_event(operation.value, node, group, should_error)
             )
             tasks.append(task)
-            await asyncio.sleep(0.01)
+
 
         try:
             await asyncio.gather(*tasks, return_exceptions=False)
         except (HTTPError, GroupAlreadyExists, GroupNotFound) as e:
-            print(f"[{e.__class__.__name__}]", e)
-            for task in tasks:
-                task.cancel()
-
-            await self._process_rollback()
+            logging.debug(f"[{e.__class__.__name__}]", e)
+            await self._cancel_and_rollback(tasks)
         else:
             # commit if no errors
-            await self._process_commit()
+            await self._process(ProcessOperation.COMMIT)
 
-        print('-'*80)
+        logging.debug('-'*80)
 
-
-    async def delete_group(self, group_id: str):
-        """Delete group to all nodes
-
-        Args:
-            group_id (str): group if of group to delete
-        """
-        print(f"\n[ClusterConnection] Deleting group id: {group_id}...")
-        group = GroupSchema(groupId=group_id)
-        tasks: list[Task] = []
-        for idx, node in enumerate(self.cluster.node_registry):
-            # error = True if idx == len(self.cluster.node_registry) - 1 else False
-            error = False
-            print(
-                f"[ClusterConnection] Publishing event ON_CLUSTER_DELETE_GROUP to {node}..."
-            )
-            if error:
-                print(f"[ClusterConnection] Simulating error on deleting group...")
-
-            task:Task = asyncio.create_task(
-                post_event("ON_CLUSTER_DELETE_GROUP", node, group, error)
-            )
-            tasks.append(task)
-            await asyncio.sleep(0.01)
-
-        try :
-            await asyncio.gather(*tasks, return_exceptions=False)
-        except (HTTPError, GroupAlreadyExists, GroupNotFound) as e:
-            print(f"[{e.__class__.__name__}]", e)
-            for task in tasks:
-                task.cancel()
-
-            await self._process_rollback()
-        else:
-            # commit if no errors
-            await self._process_commit()
-
-        print('-'*80)
